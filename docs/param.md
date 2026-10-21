@@ -9,7 +9,7 @@ ros2 run demo_nodes_cpp parameter_blackboard
 ## Code
 
 ```js
-import * as ROSLIB from '@tier4/roslibjs-foxglove';
+import * as ROSLIB from '@eyerov/roslibjs-foxglove';
 
 const ros = new ROSLIB.Ros({
   url: 'ws://localhost:8765',
@@ -41,9 +41,9 @@ param.set('hello', () => {
 
 ## Code Explanation
 
-This code is a client for ROS with `@tier4/roslibjs-foxglove`. It specifically deals with setting and getting ROS parameters.
+This code is a client for ROS with `@eyerov/roslibjs-foxglove`. It specifically deals with setting and getting ROS parameters.
 
-1. First, it imports `ROSLIB` from `@tier4/roslibjs-foxglove`.
+1. First, it imports `ROSLIB` from `@eyerov/roslibjs-foxglove`.
 
 2. Then, it creates a new `ROSLIB.Ros` instance, which connects to the localhost on port 8765 via WebSocket.
 

@@ -1,4 +1,6 @@
-# @tier4/roslibjs-foxglove
+# @eyerov/roslibjs-foxglove
+
+EyeROV's fork of [tier4/roslibjs-foxglove](https://github.com/tier4/roslibjs-foxglove). It adds a ROS 2 [`ROSLIB.Action`](docs/action.md) client and fixes service calls against `foxglove.sdk.v1` servers (foxglove_bridge 3.x).
 
 An implementation of [roslibjs](https://github.com/RobotWebTools/roslibjs)'s interfaces by using [Foxglove WebSocket Protocol](https://github.com/foxglove/ws-protocol).
 
@@ -19,7 +21,7 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 # for ROS 2
 ### JS / TS side
 
 ```sh
-npm install https://github.com/tier4/roslibjs-foxglove/releases/download/v0.0.4/tier4-roslibjs-foxglove-0.0.4.tgz
+npm install https://github.com/eyerov/roslibjs-foxglove/releases/download/v0.1.0/eyerov-roslibjs-foxglove-0.1.0.tgz
 ```
 
 ## Supported features
@@ -130,4 +132,4 @@ ROS 2 only. Foxglove bridge must be launched with `include_hidden:=true`, becaus
 
 ## License
 
-@tier4/roslibjs-foxglove is released under the Apache 2.0 license.
+@eyerov/roslibjs-foxglove is released under the Apache 2.0 license, like the original by TIER IV, Inc.

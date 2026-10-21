@@ -3,7 +3,7 @@
 ## Code
 
 ```js
-import * as ROSLIB from '@tier4/roslibjs-foxglove';
+import * as ROSLIB from '@eyerov/roslibjs-foxglove';
 
 const ros = new ROSLIB.Ros({
   url: 'ws://localhost:8765',
@@ -38,7 +38,7 @@ action.cancelGoal(goalId);
 
 ## Code Explanation
 
-This code is a simple ROS 2 action client with `@tier4/roslibjs-foxglove`.
+This code is a simple ROS 2 action client with `@eyerov/roslibjs-foxglove`.
 
 1. It creates a `ROSLIB.Ros` connection, then a `ROSLIB.Action` for the action `/fibonacci` of type `example_interfaces/action/Fibonacci`.
 
