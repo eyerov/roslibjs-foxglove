@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: 20.x
           registry-url: https://registry.npmjs.org/
-          scope: "@tier4"
+          scope: "@eyerov"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -33,4 +33,4 @@ jobs:
       - name: Publish package
         uses: softprops/action-gh-release@v2
         with:
-          files: tier4-roslibjs-foxglove-*.tgz
+          files: eyerov-roslibjs-foxglove-*.tgz

@@ -3,7 +3,7 @@
 ## Code
 
 ```js
-import * as ROSLIB from '@tier4/roslibjs-foxglove';
+import * as ROSLIB from '@eyerov/roslibjs-foxglove';
 
 const ros = new ROSLIB.Ros({
   url: 'ws://localhost:8765',
@@ -40,9 +40,9 @@ subscription.subscribe((message) => {
 
 ## Code Explanation
 
-This code is a simple publisher and subscriber for ROS with `@tier4/roslibjs-foxglove`.
+This code is a simple publisher and subscriber for ROS with `@eyerov/roslibjs-foxglove`.
 
-1. First, it imports `ROSLIB` from `@tier4/roslibjs-foxglove`.
+1. First, it imports `ROSLIB` from `@eyerov/roslibjs-foxglove`.
 
 2. Then, it creates a new `ROSLIB.Ros` instance, which connects to the localhost on port 8765 via WebSocket.
 

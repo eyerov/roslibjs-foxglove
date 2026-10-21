@@ -1,5 +1,8 @@
 import type { Ros } from './Ros';
 
+export const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 export class ServiceRequest {
   // biome-ignore lint/suspicious/noExplicitAny: <explanation>
   constructor(readonly values: any) {
@@ -40,6 +43,6 @@ export class Service<TRequest = any, TResponse = any> {
     this.#ros.rosImpl
       ?.sendServiceRequest<TRequest, TResponse>(this.name, request)
       .then(callback)
-      .catch(failedCallback);
+      .catch((error: unknown) => failedCallback?.(errorMessage(error)));
   }
 }
