@@ -14,7 +14,13 @@ export class Topic<TMessage = Message> {
   readonly #messageType: string;
 
   #publisher?: Promise<Publisher<TMessage>>;
-  #subscriptions = new Map<(message: TMessage) => void, Subscription>();
+  // In-flight promises, not resolved subscriptions: createSubscription waits
+  // until the topic is advertised, and unsubscribe() must still find (and
+  // later tear down) a subscription requested before that.
+  #subscriptions = new Map<
+    (message: TMessage) => void,
+    Promise<Subscription>
+  >();
 
   constructor(
     readonly options: {
@@ -46,22 +52,26 @@ export class Topic<TMessage = Message> {
   }
 
   subscribe(callback: (message: TMessage) => void) {
-    this.#ros.rosImpl
-      ?.createSubscription(this.name, callback)
-      .then((subscription) => {
-        this.#subscriptions.set(callback, subscription);
-      });
+    const pending = this.#ros.rosImpl?.createSubscription(this.name, callback);
+    if (pending) {
+      this.#subscriptions.set(callback, pending);
+    }
   }
 
   unsubscribe(callback?: (message: TMessage) => void) {
+    const pending = callback
+      ? [this.#subscriptions.get(callback)]
+      : [...this.#subscriptions.values()];
     if (callback) {
-      this.#subscriptions.get(callback)?.unsubscribe();
       this.#subscriptions.delete(callback);
     } else {
-      for (const subscription of this.#subscriptions.values()) {
-        subscription.unsubscribe();
-      }
       this.#subscriptions.clear();
+    }
+    for (const subscription of pending) {
+      subscription?.then(
+        (subscription) => subscription.unsubscribe(),
+        () => {},
+      );
     }
   }
 
