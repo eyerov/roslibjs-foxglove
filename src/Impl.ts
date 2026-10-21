@@ -67,6 +67,27 @@ function serviceSchema(
   };
 }
 
+/** Top-level, non-constant fields of a schema, as name → type. */
+function rootFields({ name, schemaEncoding, schema }: SchemaInfo) {
+  if (schema === undefined) {
+    return undefined;
+  }
+  let root: ReturnType<typeof parse>[number] | undefined;
+  if (schemaEncoding === 'ros2idl') {
+    const definitions = parseRos2idl(schema);
+    root =
+      definitions.find((definition) => definition.name === name) ??
+      definitions[0];
+  } else {
+    root = parse(schema, { ros2: schemaEncoding !== 'ros1msg' })[0];
+  }
+  return new Map(
+    (root?.definitions ?? [])
+      .filter((field) => !field.isConstant)
+      .map((field) => [field.name, field.type]),
+  );
+}
+
 export class Impl {
   readonly emitter = new EventEmitter<EventTypes>();
 
@@ -179,6 +200,40 @@ export class Impl {
       this.#client.on('connectionGraphUpdate', listener);
       this.#client.subscribeConnectionGraph();
     });
+  }
+
+  /** @internal Resolves once connected; true if the server speaks ROS 1. */
+  async isRos1() {
+    await this.#connecting;
+    return this.#isRos1 ?? false;
+  }
+
+  /**
+   * @internal Top-level fields (name → type) of a service's request or
+   * response, waiting up to `timeoutMs` for the service to be advertised.
+   */
+  async getServiceFields(
+    name: string,
+    part: 'request' | 'response',
+    timeoutMs?: number,
+  ) {
+    const service = await this.#getService(name, timeoutMs);
+    return rootFields(serviceSchema(service, part));
+  }
+
+  /**
+   * @internal Top-level fields (name → type) of a topic's schema, or
+   * undefined if the topic is not currently advertised.
+   */
+  getTopicFields(name: string) {
+    const channel = this.#channelsByName.get(name);
+    return channel
+      ? rootFields({
+          name: channel.schemaName,
+          schemaEncoding: channel.schemaEncoding,
+          schema: channel.schema,
+        })
+      : undefined;
   }
 
   getTopicType(topic: string) {

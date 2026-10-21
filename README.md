@@ -93,6 +93,28 @@ npm install https://github.com/tier4/roslibjs-foxglove/releases/download/v0.0.4/
 |                    | advertise   |      |
 | :heavy_check_mark: | callService |      |
 
+### ROSLIB.Action
+
+ROS 2 only. Foxglove bridge must be launched with `include_hidden:=true`, because every action is made of hidden `<name>/_action/*` services and topics. See [docs/action.md](docs/action.md).
+
+|                    | Parameter  | Note                                                         |
+| ------------------ | ---------- | ------------------------------------------------------------ |
+| :heavy_check_mark: | ros        |                                                              |
+| :heavy_check_mark: | name       |                                                              |
+| :heavy_check_mark: | actionType |                                                              |
+| :heavy_check_mark: | timeout    | Not in roslibjs. Limit for send_goal / cancel_goal (5000 ms). |
+
+|                    | Method       | Note                                                  |
+| ------------------ | ------------ | ----------------------------------------------------- |
+| :heavy_check_mark: | sendGoal     | Returns the goal UUID as hex.                         |
+| :heavy_check_mark: | cancelGoal   |                                                       |
+|                    | advertise    | Foxglove bridge cannot host services for the client. |
+|                    | unadvertise  |                                                       |
+|                    | sendFeedback |                                                       |
+|                    | setSucceeded |                                                       |
+|                    | setCanceled  |                                                       |
+|                    | setFailed    |                                                       |
+
 ### ROSLIB.Param
 
 |                    | Parameter | Note |
