@@ -16,6 +16,7 @@ import {
   type ParameterValue,
   type ParameterValues,
   type Service,
+  type ServiceCallFailure,
   type ServiceCallResponse,
 } from '@foxglove/ws-protocol';
 import EventEmitter from 'eventemitter3';
@@ -34,6 +35,36 @@ export interface Publisher<T> {
 
 export interface Subscription {
   unsubscribe: () => void;
+}
+
+type SchemaInfo = {
+  name: string;
+  schemaEncoding: string | undefined;
+  schema: string | undefined;
+};
+
+/**
+ * Request or response schema of a service. `foxglove.sdk.v1` servers describe
+ * them in `request` / `response`; older servers only send the deprecated
+ * `requestSchema` / `responseSchema` strings, named after the service type.
+ */
+function serviceSchema(
+  service: Service,
+  part: 'request' | 'response',
+): SchemaInfo {
+  const definition = service[part];
+  if (definition) {
+    return {
+      name: definition.schemaName,
+      schemaEncoding: definition.schemaEncoding,
+      schema: definition.schema,
+    };
+  }
+  return {
+    name: `${service.type}_${part === 'request' ? 'Request' : 'Response'}`,
+    schemaEncoding: undefined,
+    schema: part === 'request' ? service.requestSchema : service.responseSchema,
+  };
 }
 
 export class Impl {
@@ -244,27 +275,82 @@ export class Impl {
     };
   }
 
-  async sendServiceRequest<Request, Response>(name: string, request: Request) {
-    await this.#connecting;
-    const service = await this.#getService(name);
+  /**
+   * Calls a service. Rejects when the bridge reports a `serviceCallFailure`,
+   * when the connection closes before a response arrives, or — if `timeoutMs`
+   * is given — when the service is not advertised and answered in time.
+   */
+  async sendServiceRequest<Request, Response>(
+    name: string,
+    request: Request,
+    timeoutMs?: number,
+  ) {
+    const deadline =
+      timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
+    const service = await this.#getService(name, timeoutMs);
     const writer = this.#getMessageWriter(service);
     const reader = this.#getMessageReader(service);
 
     const callId = this.#callId++;
-    return new Promise<Response>((resolve) => {
-      const listener = (event: ServiceCallResponse) => {
-        if (event.serviceId === service.id && event.callId === callId) {
-          this.#client.off('serviceCallResponse', listener);
-          resolve(reader.readMessage(event.data));
+    return new Promise<Response>((resolve, reject) => {
+      const cleanup = () => {
+        this.#client.off('serviceCallResponse', onResponse);
+        this.#client.off('serviceCallFailure', onFailure);
+        this.emitter.off('close', onClose);
+        if (timer !== undefined) {
+          clearTimeout(timer);
         }
       };
-      this.#client.on('serviceCallResponse', listener);
-      this.#client.sendServiceCallRequest({
-        serviceId: service.id,
-        callId,
-        encoding: this.#isRos1 ? 'ros1' : 'cdr',
-        data: new DataView(writer.writeMessage(request).buffer),
-      });
+      const onResponse = (event: ServiceCallResponse) => {
+        if (event.serviceId === service.id && event.callId === callId) {
+          cleanup();
+          try {
+            resolve(reader.readMessage(event.data));
+          } catch (error) {
+            reject(error);
+          }
+        }
+      };
+      const onFailure = (event: ServiceCallFailure) => {
+        if (event.serviceId === service.id && event.callId === callId) {
+          cleanup();
+          reject(
+            new Error(`Service call to "${name}" failed: ${event.message}`),
+          );
+        }
+      };
+      const onClose = () => {
+        cleanup();
+        reject(new Error(`Connection closed during service call to "${name}"`));
+      };
+      const timer =
+        deadline === undefined
+          ? undefined
+          : setTimeout(
+              () => {
+                cleanup();
+                reject(
+                  new Error(
+                    `Service "${name}" did not respond within ${timeoutMs} ms`,
+                  ),
+                );
+              },
+              Math.max(0, deadline - Date.now()),
+            );
+      this.#client.on('serviceCallResponse', onResponse);
+      this.#client.on('serviceCallFailure', onFailure);
+      this.emitter.on('close', onClose);
+      try {
+        this.#client.sendServiceCallRequest({
+          serviceId: service.id,
+          callId,
+          encoding: this.#isRos1 ? 'ros1' : 'cdr',
+          data: new DataView(writer.writeMessage(request).buffer),
+        });
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
     });
   }
 
@@ -315,37 +401,48 @@ export class Impl {
     );
   }
 
-  async #getService(name: string) {
+  async #getService(name: string, timeoutMs?: number) {
     await this.#connecting;
-    return (
-      this.#servicesByName.get(name) ??
-      (await new Promise<Service>((resolve) => {
-        const listener = (services: Service[]) => {
-          const service = services.find((channel) => channel.name === name);
-          if (service) {
-            this.#client.off('advertiseServices', listener);
-            resolve(service);
+    const service = this.#servicesByName.get(name);
+    if (service) {
+      return service;
+    }
+    return new Promise<Service>((resolve, reject) => {
+      const listener = (services: Service[]) => {
+        const service = services.find((service) => service.name === name);
+        if (service) {
+          this.#client.off('advertiseServices', listener);
+          if (timer !== undefined) {
+            clearTimeout(timer);
           }
-        };
-        this.#client.on('advertiseServices', listener);
-      }))
-    );
+          resolve(service);
+        }
+      };
+      const timer =
+        timeoutMs === undefined
+          ? undefined
+          : setTimeout(() => {
+              this.#client.off('advertiseServices', listener);
+              reject(
+                new Error(
+                  `Service "${name}" was not advertised within ${timeoutMs} ms`,
+                ),
+              );
+            }, timeoutMs);
+      this.#client.on('advertiseServices', listener);
+    });
   }
 
   #getMessageReader(channelOrService: Channel | Service) {
-    const name =
-      'schemaName' in channelOrService
-        ? channelOrService.schemaName
-        : channelOrService.type;
-    const schemaEncoding =
-      'schemaEncoding' in channelOrService
-        ? channelOrService.schemaEncoding
-        : undefined;
-    const schema =
-      'schema' in channelOrService
-        ? channelOrService.schema
-        : channelOrService.responseSchema;
-    if (schema == undefined) {
+    const { name, schemaEncoding, schema } =
+      'topic' in channelOrService
+        ? {
+            name: channelOrService.schemaName,
+            schemaEncoding: channelOrService.schemaEncoding,
+            schema: channelOrService.schema,
+          }
+        : serviceSchema(channelOrService, 'response');
+    if (schema === undefined) {
       throw new Error(`Missing schema for "${name}"`);
     }
     return (
@@ -365,19 +462,15 @@ export class Impl {
   }
 
   #getMessageWriter(channelOrService: Channel | Service) {
-    const name =
-      'schemaName' in channelOrService
-        ? channelOrService.schemaName
-        : channelOrService.type;
-    const schemaEncoding =
-      'schemaEncoding' in channelOrService
-        ? channelOrService.schemaEncoding
-        : undefined;
-    const schema =
-      'schema' in channelOrService
-        ? channelOrService.schema
-        : channelOrService.requestSchema;
-    if (schema == undefined) {
+    const { name, schemaEncoding, schema } =
+      'topic' in channelOrService
+        ? {
+            name: channelOrService.schemaName,
+            schemaEncoding: channelOrService.schemaEncoding,
+            schema: channelOrService.schema,
+          }
+        : serviceSchema(channelOrService, 'request');
+    if (schema === undefined) {
       throw new Error(`Missing schema for "${name}"`);
     }
     return (
