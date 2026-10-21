@@ -70,3 +70,13 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml include_hidden:=true
 ```
 
 Without that, the action's services are never advertised and every goal fails after `timeout`.
+
+### Lost feedback with several goals at once
+
+Foxglove bridge sizes its ROS subscription queue from the publisher's history depth, which DDS does not report, so it falls back to `min_qos_depth` (default 1). With a one-message queue, feedback published by two goals at nearly the same moment overwrites each other, and some goals miss feedback. This affects every topic the bridge relays, not only actions. Raise the floor when launching the bridge:
+
+```sh
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml include_hidden:=true min_qos_depth:=10
+```
+
+Results are not affected: they are fetched with the `get_result` service.
